@@ -54,3 +54,40 @@ best_prod= Best_avg.idxmax()
 
 #print('BEST_AVG_PRODUCT',best_prod,Sorted_prod.iloc[0])
 
+Best_customer= df.groupby('customer_id')['revenue'].sum()
+Customer = (Best_customer / sum_of_price)*100
+#print(Customer)
+Promoting_business= df.groupby('category')['revenue'].sum()
+Sort = Promoting_business.sort_values(ascending= False)
+Total_promotion= (Sort / sum_of_price)*100
+#print(Total_promotion)
+Difference = df.groupby('category')[['revenue','quantity']].sum()
+Diff= Difference.sort_values(by='revenue', ascending= False)
+#print(Diff)
+Customers= df['customer_id'].value_counts()
+
+# Combine B_customer and Customers into a single DataFrame for easier merging
+customer_summary = pd.DataFrame({
+    'total_customer_revenue': B_customer,
+    'customer_order_count': Customers
+}).reset_index() # Convert the customer_id index into a column
+
+# Merge this summary DataFrame with the original df
+Contribution = df.merge(customer_summary, on='customer_id', how='left')
+
+#print(Contribution[['customer_id', 'total_customer_revenue', 'customer_order_count']].head())
+Cust_retn= df.groupby('monthly_sales')['customer_id'].apply(set)
+#print(Cust_retn)
+prev= Cust_retn.shift(1)
+Retention= pd.Series([ current_month_set.intersection(prev_month_set) if isinstance(prev,set) else set()
+                       for current_month_set,prev_month_set in zip(Cust_retn,prev)],index = Cust_retn.index)
+#print(Retention)
+Yearly_retn= df.groupby('yearly_sales')['customer_id'].apply(set)
+prev_year= Yearly_retn.shift(1)
+Year_retn= pd.Series([current_year_set.intersection(prev_year_set) if isinstance(prev_year,set) else set()
+
+                       for currrent_year_set,prev_year_set in zip(Yearly_retn,prev_year)],index= Yearly_retn.index)
+#print(Year_retn)
+ltv_cust= df.groupby('customer_id').agg({ 'revenue':['sum'],'order_id':['count']})
+print(ltv_cust)
+
