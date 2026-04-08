@@ -88,6 +88,24 @@ Year_retn= pd.Series([current_year_set.intersection(prev_year_set) if isinstance
 
                        for currrent_year_set,prev_year_set in zip(Yearly_retn,prev_year)],index= Yearly_retn.index)
 #print(Year_retn)
-ltv_cust= df.groupby('customer_id').agg({ 'revenue':['sum'],'order_id':['count']})
-print(ltv_cust)
-
+rev_cust= df.groupby('customer_id')['revenue'].sum()
+ord_cust= df.groupby('customer_id')['order_id'].count()
+avg_order = rev_cust/ord_cust
+lifespan = df.groupby('customer_id')['date'].agg(['max','min'])
+lifespan['lifespan'] =(lifespan['max']-lifespan['min']).dt.days
+Time= lifespan['lifespan']
+Ltv= ord_cust*avg_order*Time
+#print(Ltv)
+df['cohort_month']= df.groupby('customer_id')['date'].transform('min').dt.to_period('M')
+#print(df['cohort_month'])
+df['transaction_month'] = df['date'].dt.to_period('M')
+#print(df['transaction_month'])
+cohort_year= df['cohort_month'].dt.year
+cohort_month= df['cohort_month'].dt.month
+trans_year= df['transaction_month'].dt.year
+trans_month= df['transaction_month'].dt.month
+df['cohort_index']= (trans_year-cohort_year)*12+(trans_month-cohort_month)
+#print(df[['customer_id','cohort_month','transaction_month','cohort_index']].head())
+cohort_data= df.groupby(['cohort_index','cohort_month'])['customer_id'].nunique()
+cohort_table= cohort_data.unstack()
+print(cohort_table)
