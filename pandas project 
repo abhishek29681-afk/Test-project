@@ -1,0 +1,128 @@
+import pandas as pd
+data = {
+    "user_id": [
+        101,101,101,
+        102,102,
+        103,
+        104,104,104,
+        105,105,105,
+        106,106,
+        107,107,
+        108,108,108,
+        109,
+        110,110,110
+    ],
+
+    "event_time": [
+        "2026-01-01 10:00:00","2026-01-01 10:05:00","2026-01-01 10:15:00",
+        "2026-01-01 11:00:00","2026-01-01 11:10:00",
+        "2026-01-02 09:00:00",
+        "2026-01-02 12:00:00","2026-01-02 12:10:00","2026-01-02 12:25:00",
+        "2026-01-03 14:00:00","2026-01-03 14:20:00","2026-01-03 14:50:00",
+        "2026-01-03 15:00:00","2026-01-03 15:30:00",
+        "2026-01-04 16:00:00","2026-01-04 16:40:00",
+        "2026-01-04 18:00:00","2026-01-04 18:15:00","2026-01-04 18:45:00",
+        "2026-01-05 19:00:00",
+        "2026-01-05 20:00:00","2026-01-05 20:10:00","2026-01-05 20:25:00"
+    ],
+
+    "event_type": [
+        "visit","add_to_cart","purchase",
+        "visit","add_to_cart",
+        "visit",
+        "visit","add_to_cart","purchase",
+        "visit","add_to_cart","purchase",
+        "visit","add_to_cart",
+        "visit","purchase",
+        "visit","add_to_cart","purchase",
+        "visit",
+        "visit","add_to_cart","purchase"
+    ],
+
+    "amount": [
+        0,500,500,
+        0,300,
+        0,
+        0,700,700,
+        0,400,400,
+        0,600,
+        0,800,
+        0,200,200,
+        0,
+        0,350,350
+    ]
+}
+
+df= pd.DataFrame(data)
+total= df['event_type'].count()
+df['event_time']=pd.to_datetime(df['event_time'])
+df['date']= df['event_time'].dt.date
+
+# Define sets of unique users for calculations as standalone variables
+unique_visitors = set(df[df['event_type'] =='visit']['user_id'])
+unique_add_to_cart_users = set(df[df['event_type']=='add_to_cart']['user_id'])
+unique_purchase_users = set(df[df['event_type']=='purchase']['user_id'])
+
+add_to_cart_conversion_rate = (len(unique_add_to_cart_users) / len(unique_visitors)) * 100
+purchase_conversion_from_cart = (len(unique_purchase_users) / len(unique_add_to_cart_users)) * 100
+direct_purchase_conversion_from_visit = (len(unique_purchase_users) / len(unique_visitors)) * 100
+#print(f"Add to cart conversion from visit: {add_to_cart_conversion_rate:.2f}%")
+#print(f"Purchase conversion from add to cart: {purchase_conversion_from_cart:.2f}%")
+#print(f"Direct purchase conversion from visit: {direct_purchase_conversion_from_visit:.2f}%")
+
+first_times= df.pivot_table(index='user_id',columns='event_type',values='event_time',aggfunc='min')
+result = (first_times['purchase']-first_times['visit']).dt.total_seconds()/3600
+avg= result.dropna().mean()
+#print(avg)
+
+intersection= unique_add_to_cart_users & unique_purchase_users
+not_purchase = unique_add_to_cart_users - intersection
+#print(not_purchase)
+#print(intersection)
+
+visitors= unique_visitors
+adding= (unique_visitors & unique_add_to_cart_users)
+only_adding= adding & not_purchase
+purchased= (adding & unique_purchase_users)
+#print(purchased)
+
+# These lines are correctly creating boolean columns in the DataFrame
+df['unique_visitor'] = df['event_type'] =='visit'
+df['unique_purchase_user'] = df['event_type']=='purchase'
+date_conversion= df.pivot_table(index='date',columns='event_type',values='user_id',aggfunc='nunique')
+#print(date_conversion)
+trusted_cust= df[df['event_type']=='purchase'].groupby('user_id').size()
+#print(trusted_cust)
+top_cust= df[df['event_type']=='purchase'].groupby('user_id')['amount'].sum().sort_values(ascending=False)
+#print(top_cust)
+len_visitors= df[df['event_type']=='visit']['user_id'].nunique()
+len_cart= df[df['event_type']=='add_to_cart']['user_id'].nunique()
+len_purchase= df[df['event_type']=='purchase']['user_id'].nunique()
+drop_visitors= (len_cart / len_visitors)*100
+Droped= (100 - drop_visitors)
+#print(Droped)
+drop_cart= (len_purchase / len_cart)*100
+drop= (100 - drop_cart)
+#print(drop)
+direct= df.groupby('user_id')['event_type'].apply(list)
+#print(direct)
+wierd_user= unique_purchase_users -unique_add_to_cart_users
+#print(wierd_user)
+count= df['user_id'].nunique()
+percent= (len(wierd_user) / len(unique_purchase_users))*100
+#print(percent)
+df['difference']= df.groupby('user_id')['event_time'].diff()
+df['new_session']= ((df['difference']>pd.Timedelta(minutes =30)) |df['difference'].isna()).astype(int)
+df['session_id']= df.groupby('user_id')['new_session'].cumsum()
+#print(df['session_id'])
+first_visit= df[df['event_type']=='visit'].groupby('user_id')['event_time'].min()
+first_purchase= df[df['event_type']=='purchase'].groupby('user_id')['event_time'].min()
+time_diff= first_purchase - first_visit
+#print(time_diff)
+# Corrected f_visit to maintain datetime64[ns] dtype using .dt.normalize()
+f_visit= (df[df['event_type']=='visit'].groupby('user_id')['event_time'].min().dt.normalize().rename('cohort_date'))
+p= df[df['event_type']=='purchase'].copy()
+p= p.merge(f_visit,on='user_id', how='left')
+p['day_index'] = (p['event_time'] - p['cohort_date']).dt.days
+table= p.pivot_table(index= 'cohort_date',columns='day_index',values='amount',aggfunc='sum')
+print(table)
